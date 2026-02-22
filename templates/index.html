@@ -79,6 +79,54 @@
         .glass-btn.warning { background: linear-gradient(45deg, #f72585, #b5179e); }
         .glass-btn.danger { background: linear-gradient(45deg, #dc3545, #bb2d3b); }
 
+        /* Accessibility mode toggle button */
+        .accessibility-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+            padding: 15px 25px;
+            border-radius: 50px;
+            background: linear-gradient(45deg, #00ff88, #4361ee);
+            color: black;
+            font-weight: bold;
+            border: 2px solid white;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+            transition: 0.3s;
+            font-size: 1.1em;
+        }
+
+        .accessibility-toggle.active {
+            background: linear-gradient(45deg, #f72585, #b5179e);
+            color: white;
+            box-shadow: 0 4px 15px rgba(247, 37, 133, 0.3);
+        }
+
+        .accessibility-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        /* Accessibility mode indicator */
+        .mode-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(6, 214, 160, 0.2);
+            border: 1px solid #06d6a0;
+            border-radius: 30px;
+            color: #06d6a0;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .mode-indicator.blind-mode {
+            background: rgba(247, 37, 133, 0.2);
+            border-color: #f72585;
+            color: #f72585;
+        }
+
         .main-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -405,17 +453,15 @@
             font-style: italic;
         }
 
-        .mode-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            background: rgba(6, 214, 160, 0.2);
-            border: 1px solid #06d6a0;
-            border-radius: 30px;
-            color: #06d6a0;
-            backdrop-filter: blur(10px);
-            z-index: 1000;
+        /* Accessibility Status Bar */
+        .accessibility-status {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-size: 1.1em;
+            text-align: center;
+            border: 1px solid #00ff88;
         }
 
         .loader {
@@ -454,10 +500,20 @@
     </style>
 </head>
 <body>
+    <!-- Accessibility Mode Toggle Button -->
+    <button class="accessibility-toggle" id="accessibilityToggle" onclick="toggleAccessibilityMode()">
+        <i class="fas fa-universal-access"></i> <span id="toggleText">Blind Mode OFF</span>
+    </button>
+
     <div class="container">
         <div class="header">
             <h1 class="gradient-text"><i class="fas fa-eye"></i> VisionAssist AI</h1>
             <p class="subtitle">Complete Solution for Visually Impaired with Sonar Detection</p>
+        </div>
+
+        <!-- Accessibility Status Bar -->
+        <div class="accessibility-status" id="accessibilityStatus">
+            <i class="fas fa-info-circle"></i> Normal Mode: Click once to activate
         </div>
 
         <div class="control-panel">
@@ -626,7 +682,69 @@
         let lastDescription = "";
         let lastSonarDistance = "0";
         
+        // Accessibility Mode Variables
+        let blindMode = false;
+        let tapTimer = null;
+        let lastTappedElement = null;
+        let tapCount = 0;
+        
         const synth = window.speechSynthesis;
+
+        // ==================== ACCESSIBILITY MODE FUNCTIONS ====================
+        function toggleAccessibilityMode() {
+            blindMode = !blindMode;
+            const toggleBtn = document.getElementById('accessibilityToggle');
+            const toggleText = document.getElementById('toggleText');
+            const statusBar = document.getElementById('accessibilityStatus');
+            const modeIndicator = document.getElementById('modeIndicator');
+            
+            if (blindMode) {
+                toggleBtn.classList.add('active');
+                toggleText.innerHTML = 'Blind Mode ON';
+                statusBar.innerHTML = '<i class="fas fa-universal-access"></i> Blind Mode: Single tap to hear, double tap to activate';
+                modeIndicator.classList.add('blind-mode');
+                modeIndicator.innerHTML = '<i class="fas fa-universal-access"></i> Blind Mode Active';
+                speak('Blind mode activated. Single tap any button to hear what it does. Double tap to activate.');
+            } else {
+                toggleBtn.classList.remove('active');
+                toggleText.innerHTML = 'Blind Mode OFF';
+                statusBar.innerHTML = '<i class="fas fa-info-circle"></i> Normal Mode: Click once to activate';
+                modeIndicator.classList.remove('blind-mode');
+                modeIndicator.innerHTML = '<i class="fas fa-check-circle"></i> Normal Mode Active';
+                speak('Normal mode activated. Click once to use buttons normally.');
+            }
+        }
+
+        // Handle clicks based on mode
+        function handleElementClick(element, elementName, action) {
+            if (blindMode) {
+                // Blind Mode: Single tap speaks, double tap activates
+                tapCount++;
+                
+                if (lastTappedElement === elementName) {
+                    clearTimeout(tapTimer);
+                } else {
+                    tapCount = 1;
+                    lastTappedElement = elementName;
+                }
+                
+                tapTimer = setTimeout(() => {
+                    if (tapCount === 1) {
+                        // SINGLE TAP - Speak
+                        speak(elementName);
+                    } else if (tapCount >= 2) {
+                        // DOUBLE TAP - Perform action
+                        action();
+                    }
+                    
+                    tapCount = 0;
+                    lastTappedElement = null;
+                }, 500);
+            } else {
+                // Normal Mode: Just perform action
+                action();
+            }
+        }
 
         // ==================== VOICE FUNCTIONS ====================
         function speak(text) {
@@ -666,6 +784,7 @@
                         sonarBar.style.background = 'linear-gradient(90deg, #f72585, #b5179e)';
                         sonarAlert.innerHTML = '⚠️ DANGER: Obstacle very close!';
                         sonarAlert.style.color = '#f72585';
+                        if (blindMode) speak('Warning! Obstacle very close at ' + distance + ' centimeters');
                     } else if (distance < 100 && distance > 0) {
                         sonarBar.style.background = 'linear-gradient(90deg, #f8961e, #f3722c)';
                         sonarAlert.innerHTML = '⚠️ Caution: Obstacle approaching';
@@ -865,8 +984,10 @@
         }
 
         // ==================== DOCUMENT READER FUNCTIONS ====================
-        document.getElementById('uploadArea').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
+        document.getElementById('uploadArea').addEventListener('click', (e) => {
+            handleElementClick(e.target, 'Upload Document Area', () => {
+                document.getElementById('fileInput').click();
+            });
         });
 
         document.getElementById('fileInput').addEventListener('change', async (e) => {
@@ -926,81 +1047,90 @@
         }
 
         // ==================== VOICE ASSISTANT FUNCTIONS ====================
-        document.getElementById('askQuestionBtn').addEventListener('click', () => {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                speak('Voice recognition not supported in this browser');
-                return;
-            }
-            
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'en-US';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            
-            document.getElementById('listeningIndicator').classList.add('active');
-            document.getElementById('voiceStatusText').innerHTML = 'Listening... Speak now';
-            document.getElementById('voiceTranscript').innerHTML = '<p>🎤 Listening...</p>';
-            
-            recognition.start();
-            
-            recognition.onresult = async (event) => {
-                const question = event.results[0][0].transcript;
-                document.getElementById('voiceTranscript').innerHTML = `<p><i class="fas fa-quote-left"></i> "${question}"</p>`;
-                document.getElementById('voiceStatusText').innerHTML = 'Processing...';
-                
-                document.getElementById('voiceResponse').style.display = 'block';
-                document.getElementById('voiceResponseText').innerHTML = '<div class="loader"></div>';
-                
-                try {
-                    const response = await fetch('/api/voice-ask', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            question: question,
-                            context: lastDescription
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.status === 'success') {
-                        document.getElementById('voiceResponseText').innerHTML = data.answer;
-                        speak(data.answer);
-                    } else {
-                        document.getElementById('voiceResponseText').innerHTML = 'Error: ' + data.error;
-                    }
-                } catch (error) {
-                    document.getElementById('voiceResponseText').innerHTML = 'Error: ' + error.message;
+        document.getElementById('askQuestionBtn').addEventListener('click', (e) => {
+            handleElementClick(e.target, 'Ask Question Button', () => {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    speak('Voice recognition not supported in this browser');
+                    return;
                 }
                 
-                document.getElementById('listeningIndicator').classList.remove('active');
-                document.getElementById('voiceStatusText').innerHTML = 'Click "Ask Question" to speak';
-            };
-            
-            recognition.onerror = (event) => {
-                document.getElementById('voiceTranscript').innerHTML = '<p>❌ Error: Could not understand</p>';
-                document.getElementById('listeningIndicator').classList.remove('active');
-                document.getElementById('voiceStatusText').innerHTML = 'Click "Ask Question" to speak';
-            };
-            
-            recognition.onend = () => {
-                document.getElementById('listeningIndicator').classList.remove('active');
-            };
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+                
+                document.getElementById('listeningIndicator').classList.add('active');
+                document.getElementById('voiceStatusText').innerHTML = 'Listening... Speak now';
+                document.getElementById('voiceTranscript').innerHTML = '<p>🎤 Listening...</p>';
+                
+                recognition.start();
+                
+                recognition.onresult = async (event) => {
+                    const question = event.results[0][0].transcript;
+                    document.getElementById('voiceTranscript').innerHTML = `<p><i class="fas fa-quote-left"></i> "${question}"</p>`;
+                    document.getElementById('voiceStatusText').innerHTML = 'Processing...';
+                    
+                    document.getElementById('voiceResponse').style.display = 'block';
+                    document.getElementById('voiceResponseText').innerHTML = '<div class="loader"></div>';
+                    
+                    try {
+                        const response = await fetch('/api/voice-ask', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                question: question,
+                                context: lastDescription
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.status === 'success') {
+                            document.getElementById('voiceResponseText').innerHTML = data.answer;
+                            speak(data.answer);
+                        } else {
+                            document.getElementById('voiceResponseText').innerHTML = 'Error: ' + data.error;
+                        }
+                    } catch (error) {
+                        document.getElementById('voiceResponseText').innerHTML = 'Error: ' + error.message;
+                    }
+                    
+                    document.getElementById('listeningIndicator').classList.remove('active');
+                    document.getElementById('voiceStatusText').innerHTML = 'Click "Ask Question" to speak';
+                };
+                
+                recognition.onerror = (event) => {
+                    document.getElementById('voiceTranscript').innerHTML = '<p>❌ Error: Could not understand</p>';
+                    document.getElementById('listeningIndicator').classList.remove('active');
+                    document.getElementById('voiceStatusText').innerHTML = 'Click "Ask Question" to speak';
+                };
+                
+                recognition.onend = () => {
+                    document.getElementById('listeningIndicator').classList.remove('active');
+                };
+            });
         });
 
-        document.getElementById('repeatLastBtn').addEventListener('click', () => {
-            if (lastDescription) {
-                speak(lastDescription);
-            } else {
-                speak('No previous description available');
-            }
+        document.getElementById('repeatLastBtn').addEventListener('click', (e) => {
+            handleElementClick(e.target, 'Repeat Last Button', () => {
+                if (lastDescription) {
+                    speak(lastDescription);
+                } else {
+                    speak('No previous description available');
+                }
+            });
         });
 
-        document.getElementById('explainSimpleBtn').addEventListener('click', () => explainText('simple'));
-        document.getElementById('explainSummaryBtn').addEventListener('click', () => explainText('summary'));
+        document.getElementById('explainSimpleBtn').addEventListener('click', (e) => {
+            handleElementClick(e.target, 'Explain Simply Button', () => explainText('simple'));
+        });
+        
+        document.getElementById('explainSummaryBtn').addEventListener('click', (e) => {
+            handleElementClick(e.target, 'Summary Button', () => explainText('summary'));
+        });
 
-        // ==================== EVENT LISTENERS ====================
+        // ==================== EVENT LISTENERS WITH ACCESSIBILITY MODE ====================
         document.addEventListener('DOMContentLoaded', () => {
             console.log('DOM loaded, initializing...');
             
@@ -1011,22 +1141,36 @@
             updateSonar();
             sonarInterval = setInterval(updateSonar, 1000);
             
-            // Add event listeners
-            document.getElementById('startCameraBtn').addEventListener('click', startCamera);
-            document.getElementById('stopCameraBtn').addEventListener('click', stopCamera);
-            document.getElementById('pauseVoiceBtn').addEventListener('click', () => {
-                isVoicePaused = true;
-                speak('Voice paused');
+            // Add event listeners with accessibility mode support
+            document.getElementById('startCameraBtn').addEventListener('click', (e) => {
+                handleElementClick(e.target, 'Start Camera Button', startCamera);
             });
-            document.getElementById('resumeVoiceBtn').addEventListener('click', () => {
-                isVoicePaused = false;
-                speak('Voice resumed');
+            
+            document.getElementById('stopCameraBtn').addEventListener('click', (e) => {
+                handleElementClick(e.target, 'Stop Camera Button', stopCamera);
             });
-            document.getElementById('findRouteBtn').addEventListener('click', findRoute);
+            
+            document.getElementById('pauseVoiceBtn').addEventListener('click', (e) => {
+                handleElementClick(e.target, 'Pause Voice Button', () => {
+                    isVoicePaused = true;
+                    speak('Voice paused');
+                });
+            });
+            
+            document.getElementById('resumeVoiceBtn').addEventListener('click', (e) => {
+                handleElementClick(e.target, 'Resume Voice Button', () => {
+                    isVoicePaused = false;
+                    speak('Voice resumed');
+                });
+            });
+            
+            document.getElementById('findRouteBtn').addEventListener('click', (e) => {
+                handleElementClick(e.target, 'Find Route Button', findRoute);
+            });
 
             // Welcome message
             setTimeout(() => {
-                speak('Welcome to VisionAssist. All systems are working.');
+                speak('Welcome to VisionAssist. All systems are working. Use the blind mode toggle button to switch between normal and blind friendly modes.');
             }, 2000);
             
             console.log('Initialization complete');
